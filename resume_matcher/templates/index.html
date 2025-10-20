@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Matcher</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #666;
+        }
+        .results {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .score {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .score.excellent { color: #28a745; }
+        .score.good { color: #ffc107; }
+        .score.poor { color: #dc3545; }
+        .skill-list {
+            margin: 10px 0;
+        }
+        .skill-item {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 3px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .matched-skill {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .missing-skill {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Resume Matcher</h1>
+        <p style="text-align: center; color: #666;">Upload your resume and job description to see how well they match!</p>
+        
+        <form id="matchForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="resume">Upload Resume (PDF or Word):</label>
+                <input type="file" id="resume" name="resume" accept=".pdf,.docx" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="job_description">Job Description:</label>
+                <textarea id="job_description" name="job_description" placeholder="Paste the job description here..." required></textarea>
+            </div>
+            
+            <button type="submit">Analyze Match</button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <p>🔄 Analyzing your resume... This may take a moment.</p>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="score" id="overallScore"></div>
+            
+            <h3>📊 Detailed Breakdown:</h3>
+            <div id="detailedScores"></div>
+            
+            <h3>✅ Matched Skills:</h3>
+            <div id="matchedSkills" class="skill-list"></div>
+            
+            <h3>❌ Missing Skills:</h3>
+            <div id="missingSkills" class="skill-list"></div>
+            
+            <h3>📋 Resume Information:</h3>
+            <div id="resumeInfo"></div>
+        </div>
+        
+        <div class="error" id="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        document.getElementById('matchForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const error = document.getElementById('error');
+            
+            // Show loading, hide results and errors
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            error.style.display = 'none';
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    showError(data.error);
+                }
+            } catch (err) {
+                showError('An error occurred while processing your request.');
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+        
+        function displayResults(data) {
+            const results = document.getElementById('results');
+            const match = data.match_result;
+            
+            // Overall score
+            const scoreElement = document.getElementById('overallScore');
+            scoreElement.textContent = `Overall Match: ${match.overall_score}%`;
+            
+            if (match.overall_score >= 70) {
+                scoreElement.className = 'score excellent';
+            } else if (match.overall_score >= 40) {
+                scoreElement.className = 'score good';
+            } else {
+                scoreElement.className = 'score poor';
+            }
+            
+            // Detailed scores
+            document.getElementById('detailedScores').innerHTML = `
+                <p><strong>Semantic Similarity:</strong> ${match.semantic_score}%</p>
+                <p><strong>Keyword Match:</strong> ${match.keyword_score}%</p>
+                <p><strong>Skill Match:</strong> ${match.skill_match.skill_match_percentage.toFixed(1)}%</p>
+            `;
+            
+            // Matched skills
+            const matchedSkillsHtml = match.skill_match.matched_skills.map(skill => 
+                `<span class="skill-item matched-skill">${skill}</span>`
+            ).join('');
+            document.getElementById('matchedSkills').innerHTML = matchedSkillsHtml || '<p>No matched skills found.</p>';
+            
+            // Missing skills
+            const missingSkillsHtml = match.skill_match.missing_skills.map(skill => 
+                `<span class="skill-item missing-skill">${skill}</span>`
+            ).join('');
+            document.getElementById('missingSkills').innerHTML = missingSkillsHtml || '<p>No missing skills.</p>';
+            
+            // Resume info
+            document.getElementById('resumeInfo').innerHTML = `
+                <p><strong>Email:</strong> ${data.resume_info.email || 'Not found'}</p>
+                <p><strong>Phone:</strong> ${data.resume_info.phone || 'Not found'}</p>
+                <p><strong>Resume Length:</strong> ${data.resume_info.text_length} characters</p>
+            `;
+            
+            results.style.display = 'block';
+        }
+        
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
